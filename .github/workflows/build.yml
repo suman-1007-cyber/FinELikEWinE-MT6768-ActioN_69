@@ -226,6 +226,37 @@ jobs:
             grep -qE "\b$f\b" include/linux/susfs.h || echo "::warning::KernelSU uses $f but include/linux/susfs.h does not declare it"
           done
 
+      - name: SUSFS wiring report
+        if: env.ENABLE_KERNELSU == 'true'
+        continue-on-error: true
+        run: |
+          {
+            echo "# SUSFS wiring report  (KernelSU tag: $KERNELSU_TAG)"
+            echo "Tree SUSFS: $(grep -ho 'SUSFS_VERSION "[^"]*"' include/linux/susfs.h)"
+            echo "KernelSU ref: $(git -C KernelSU-Next rev-parse --abbrev-ref HEAD 2>/dev/null) @ $(git -C KernelSU-Next rev-parse --short HEAD 2>/dev/null)"
+            echo
+            echo "## KernelSU driver files mentioning susfs"
+            grep -rIl -i susfs drivers/kernelsu/ 2>/dev/null || echo "(none)"
+            echo
+            echo "## KSU_SUSFS Kconfig symbols provided by the driver"
+            grep -rhn '^config KSU_SUSFS' drivers/kernelsu/ 2>/dev/null || echo "(none)"
+            echo
+            echo "## Tree SUSFS commands handled by the KernelSU driver  [x]=handled  [ ]=missing"
+            for c in $(grep -oE 'CMD_SUSFS_[A-Z_0-9]+' include/linux/susfs_def.h | sort -u); do
+              if grep -rqw "$c" drivers/kernelsu/ 2>/dev/null; then echo "  [x] $c"; else echo "  [ ] $c"; fi
+            done
+            echo
+            echo "## Where the driver answers SHOW_VERSION"
+            grep -rn 'SHOW_VERSION\|susfs_show_version' drivers/kernelsu/ 2>/dev/null | head -5 || true
+            echo
+            echo "## susfs_* functions the driver calls but tree does not define in fs/susfs.c"
+            grep -rhoE '\bsusfs_[a-z0-9_]+\(' drivers/kernelsu/ 2>/dev/null | tr -d '(' | sort -u | while read -r f; do
+              grep -qE "\b$f\(" fs/susfs.c || echo "  $f"
+            done
+          } > susfs_report.txt
+          cat susfs_report.txt
+          cat susfs_report.txt >> "$GITHUB_STEP_SUMMARY"
+
       - name: Build kernel
         run: |
           set -eo pipefail
@@ -273,6 +304,7 @@ jobs:
           path: |
             ${{ env.ZIP_NAME }}.zip
             out/build.log
+            susfs_report.txt
           if-no-files-found: error
 
       - name: Release
