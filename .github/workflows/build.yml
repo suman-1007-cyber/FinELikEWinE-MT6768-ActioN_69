@@ -70,7 +70,7 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y --no-install-recommends bc bison flex libssl-dev libelf-dev \
             zstd xz-utils cpio lz4 ccache dos2unix device-tree-compiler python3 zip unzip curl \
-            git make build-essential libncurses-dev binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
+            git make build-essential libncurses-dev binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
           if [ "$ENABLE_PYTHON2" = "true" ]; then sudo apt-get install -y python2 || true; fi
 
       - name: Restore ccache
@@ -84,25 +84,46 @@ jobs:
       - name: Fetch toolchains
         run: |
           mkdir -p "$HOME/tc" && cd "$HOME/tc"
-          if [ "$USE_CLANG" = "true" ]; then
-            mkdir clang
-            case "$CLANG_SOURCE" in
-              *.tar.zst) curl -fL "$CLANG_SOURCE" | tar --zstd -xf - -C clang ;;
-              *.tar.gz|*.tgz) curl -fL "$CLANG_SOURCE" | tar -xzf - -C clang ;;
-              *.tar.xz) curl -fL "$CLANG_SOURCE" | tar -xJf - -C clang ;;
-              *) git clone --depth=1 ${CLANG_BRANCH:+-b "$CLANG_BRANCH"} "$CLANG_SOURCE" clang ;;
+
+          # Download to a file, detect the real archive type from magic bytes, then extract.
+          # (A failed/blocked download that returns an HTML page is reported clearly instead of
+          #  dying with "xz: File format not recognized".)
+          fetch_archive() {  # url dest strip
+            local url="$1" dest="$2" strip="${3:-0}" f magic
+            mkdir -p "$dest"
+            case "$url" in
+              *.git|*/tree/*) git clone --depth=1 ${4:+-b "$4"} "$url" "$dest"; return $? ;;
             esac
+            f=$(mktemp)
+            curl -fL --retry 5 --retry-all-errors --retry-delay 5 -o "$f" "$url" || { echo "download failed: $url"; return 1; }
+            magic=$(od -An -tx1 -N6 "$f" | tr -d ' \n')
+            echo "downloaded $(stat -c%s "$f") bytes, magic=$magic  <- $url"
+            case "$magic" in
+              fd377a585a00*) tar -xJf "$f" -C "$dest" --strip-components="$strip" ;;
+              28b52ffd*)     tar --zstd -xf "$f" -C "$dest" --strip-components="$strip" ;;
+              1f8b*)         tar -xzf "$f" -C "$dest" --strip-components="$strip" ;;
+              425a68*)       tar -xjf "$f" -C "$dest" --strip-components="$strip" ;;
+              *) echo "Not an archive. First bytes of response:"; head -c 300 "$f"; echo; return 1 ;;
+            esac
+          }
+
+          if [ "$USE_CLANG" = "true" ]; then
+            fetch_archive "$CLANG_SOURCE" clang 0 "$CLANG_BRANCH" || { echo "::error::Clang download failed"; exit 1; }
             # flatten if the archive had one top-level dir
             if [ ! -d clang/bin ] && [ "$(ls clang | wc -l)" = 1 ]; then mv clang/*/* clang/ 2>/dev/null || true; fi
+            test -x clang/bin/clang || { echo "::error::clang/bin/clang not found after extract"; ls -R clang | head -30; exit 1; }
             echo "$HOME/tc/clang/bin" >> "$GITHUB_PATH"
           fi
+
+          # GCC is only needed for the CROSS_COMPILE prefixes. If a Linaro download fails we fall back
+          # to the apt cross toolchains (gcc-aarch64-linux-gnu / gcc-arm-linux-gnueabi) installed earlier.
           if [ "$USE_GCC_64" = "true" ]; then
-            mkdir gcc64 && curl -fL "$GCC_64_SOURCE" | tar -xJf - -C gcc64 --strip-components=1
-            echo "$HOME/tc/gcc64/bin" >> "$GITHUB_PATH"
+            if fetch_archive "$GCC_64_SOURCE" gcc64 1 "$GCC_64_BRANCH"; then echo "$HOME/tc/gcc64/bin" >> "$GITHUB_PATH"
+            else echo "::warning::GCC64 download failed, using apt aarch64-linux-gnu toolchain instead"; fi
           fi
           if [ "$USE_GCC_32" = "true" ]; then
-            mkdir gcc32 && curl -fL "$GCC_32_SOURCE" | tar -xJf - -C gcc32 --strip-components=1
-            echo "$HOME/tc/gcc32/bin" >> "$GITHUB_PATH"
+            if fetch_archive "$GCC_32_SOURCE" gcc32 1 "$GCC_32_BRANCH"; then echo "$HOME/tc/gcc32/bin" >> "$GITHUB_PATH"
+            else echo "::warning::GCC32 download failed, using apt arm-linux-gnueabi toolchain instead"; fi
           fi
 
       - name: Apply patches
