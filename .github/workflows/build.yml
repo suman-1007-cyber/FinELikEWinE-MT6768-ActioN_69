@@ -34,7 +34,7 @@ jobs:
 
   build:
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
@@ -120,6 +120,29 @@ jobs:
           if [ "$KSU_REVERT" = "true" ]; then git checkout -- . ; fi
           ls drivers | grep -i kernelsu || { echo "::error::KernelSU driver missing after setup"; exit 1; }
           grep -n kernelsu drivers/Makefile drivers/Kconfig
+
+      - name: KernelSU / SUSFS compat fixes
+        if: env.ENABLE_KERNELSU == 'true'
+        run: |
+          # Tree ships SUSFS v2.3.0 where try_umount was removed (deprecated),
+          # but the KernelSU fork's supercalls.c still calls susfs_add_try_umount().
+          if grep -rq 'susfs_add_try_umount' drivers/kernelsu && ! grep -q 'susfs_add_try_umount' include/linux/susfs.h; then
+            echo "Adding no-op susfs_add_try_umount() stub to include/linux/susfs.h"
+            python3 - <<'PY'
+          import re
+          p = "include/linux/susfs.h"
+          s = open(p).read()
+          stub = ("\n/* compat stub: try_umount removed in SUSFS v2.x, still referenced by KernelSU */\n"
+                  "static inline int susfs_add_try_umount(void *arg) { (void)arg; return 0; }\n")
+          i = s.rfind("#endif")
+          s = s[:i] + stub + "\n" + s[i:] if i != -1 else s + stub
+          open(p, "w").write(s)
+          PY
+          fi
+          # Diagnostic: SUSFS functions KernelSU calls that the tree does not declare
+          grep -rhoE '\bsusfs_[a-z0-9_]+\(' drivers/kernelsu | tr -d '(' | sort -u | while read -r f; do
+            grep -qE "\b$f\b" include/linux/susfs.h || echo "::warning::KernelSU uses $f but include/linux/susfs.h does not declare it"
+          done
 
       - name: Build kernel
         run: |
