@@ -34,7 +34,7 @@ jobs:
 
   build:
     needs: prepare
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
@@ -138,6 +138,39 @@ jobs:
           s = s[:i] + stub + "\n" + s[i:] if i != -1 else s + stub
           open(p, "w").write(s)
           PY
+          fi
+          # SUSFS v2.3.0 in this tree dropped susfs_try_umount() and made susfs_run_sus_path_loop()
+          # static (it now runs from the susfs_extra_works workqueue). Older KernelSU forks still call
+          # both from setuid_hook.c -> "undefined symbol" at link time. Provide compat shims.
+          NEED_COMPAT=0
+          for f in susfs_try_umount susfs_run_sus_path_loop; do
+            if grep -rqE "\\b$f\\b" drivers/kernelsu && ! grep -qE "^(int|void|bool)[[:space:]]+$f\\(" fs/susfs.c; then NEED_COMPAT=1; fi
+          done
+          if [ "$NEED_COMPAT" = 1 ] && [ ! -f fs/susfs_compat.c ]; then
+            echo "Adding fs/susfs_compat.c (susfs_try_umount / susfs_run_sus_path_loop shims)"
+            cat > fs/susfs_compat.c <<'EOF'
+          // SPDX-License-Identifier: GPL-2.0
+          /* Compat shims so older KernelSU forks link against SUSFS v2.x */
+          #include <linux/kernel.h>
+          #include <linux/types.h>
+          #include <linux/workqueue.h>
+
+          extern struct work_struct susfs_extra_works;
+
+          /* try_umount was removed from SUSFS v2.x (KernelSU does its own umount) */
+          void susfs_try_umount(uid_t uid)
+          {
+          }
+
+          /* In SUSFS v2.x the sus_path_loop runs from a workqueue instead of inline */
+          void susfs_run_sus_path_loop(uid_t uid)
+          {
+          	if (susfs_extra_works.func)
+          		schedule_work(&susfs_extra_works);
+          }
+          EOF
+            grep -q susfs_compat fs/Makefile || sed -i '/^obj-\$(CONFIG_KSU_SUSFS) += susfs\.o/a obj-$(CONFIG_KSU_SUSFS) += susfs_compat.o' fs/Makefile
+            grep -n susfs fs/Makefile
           fi
           # Diagnostic: SUSFS functions KernelSU calls that the tree does not declare
           grep -rhoE '\bsusfs_[a-z0-9_]+\(' drivers/kernelsu | tr -d '(' | sort -u | while read -r f; do
