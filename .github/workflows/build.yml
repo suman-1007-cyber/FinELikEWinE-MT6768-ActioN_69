@@ -124,6 +124,15 @@ jobs:
           ls drivers | grep -i kernelsu || { echo "::error::KernelSU driver missing after setup"; exit 1; }
           grep -n kernelsu drivers/Makefile drivers/Kconfig
 
+      - name: Show KernelSU driver version
+        if: env.ENABLE_KERNELSU == 'true'
+        run: |
+          if [ -d KernelSU-Next/.git ]; then
+            echo "KernelSU ref: $(git -C KernelSU-Next rev-parse --abbrev-ref HEAD) @ $(git -C KernelSU-Next rev-parse --short HEAD)"
+            N=$(git -C KernelSU-Next rev-list --count HEAD)
+            echo "Approx. driver version code: $((30000 + N))  (manager must be this version or compatible)"
+          fi
+
       - name: KernelSU / SUSFS compat fixes
         if: env.ENABLE_KERNELSU == 'true'
         run: |
