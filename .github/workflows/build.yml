@@ -7,6 +7,14 @@ on:
         description: "Override devices (comma separated, blank = DEVICES from ksun.env)"
         required: false
         default: ""
+      kernelsu_tag:
+        description: "Override KERNELSU_TAG (blank = ksun.env), e.g. legacy / dev / shockwave"
+        required: false
+        default: ""
+      kernelsu_setup_source:
+        description: "Override KERNELSU_SETUP_SOURCE url (blank = ksun.env)"
+        required: false
+        default: ""
       release:
         description: "Publish a GitHub release"
         type: boolean
@@ -50,6 +58,14 @@ jobs:
             k="${l%%=*}"; v="${l#*=}"
             printf '%s<<__EOF__\n%s\n__EOF__\n' "$k" "$v" >> "$GITHUB_ENV"
           done
+
+      - name: Apply manual KernelSU overrides
+        env:
+          IN_TAG: ${{ github.event.inputs.kernelsu_tag }}
+          IN_SRC: ${{ github.event.inputs.kernelsu_setup_source }}
+        run: |
+          if [ -n "$IN_TAG" ]; then printf 'KERNELSU_TAG<<__EOF__\n%s\n__EOF__\n' "$IN_TAG" >> "$GITHUB_ENV"; echo "KERNELSU_TAG overridden: $IN_TAG"; fi
+          if [ -n "$IN_SRC" ]; then printf 'KERNELSU_SETUP_SOURCE<<__EOF__\n%s\n__EOF__\n' "$IN_SRC" >> "$GITHUB_ENV"; echo "KERNELSU_SETUP_SOURCE overridden: $IN_SRC"; fi
 
       - name: Checkout external kernel source
         if: env.KERNEL_SOURCE != ''
