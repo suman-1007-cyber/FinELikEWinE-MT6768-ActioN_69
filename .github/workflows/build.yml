@@ -54,6 +54,8 @@ jobs:
       - name: Checkout external kernel source
         if: env.KERNEL_SOURCE != ''
         run: |
+          # keep this repo's patches/ before the checkout is replaced by the kernel source
+          mkdir -p "$RUNNER_TEMP/patches" && cp -r patches/. "$RUNNER_TEMP/patches/" 2>/dev/null || true
           rm -rf ./* .[!.]*  || true
           git clone --depth=1 -b "$KERNEL_SOURCE_BRANCH" "$KERNEL_SOURCE" .
 
@@ -106,7 +108,8 @@ jobs:
       - name: Apply patches
         run: |
           shopt -s nullglob
-          for p in patches/*.patch; do
+          PDIR=patches; [ -d "$RUNNER_TEMP/patches" ] && PDIR="$RUNNER_TEMP/patches"
+          for p in "$PDIR"/*.patch; do
             echo ">> $p"
             git apply --check "$p" && git apply "$p" || { echo "::warning::$p did not apply cleanly (skipped)"; }
           done
