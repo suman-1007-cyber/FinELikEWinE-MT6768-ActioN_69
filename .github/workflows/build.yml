@@ -291,7 +291,7 @@ jobs:
           "${MK[@]}" 2>&1 | tee out/build.log
           test -f "out/arch/arm64/boot/$KERNEL_IMAGE_NAME" || { echo "::error::$KERNEL_IMAGE_NAME not produced"; tail -n 60 out/build.log; exit 1; }
 
-      - name: Package with AnyKernel3
+      - name: Package with FinELikEWinE_69
         run: |
           git clone --depth=1 -b "$ANYKERNEL3_BRANCH" "$ANYKERNEL3_SOURCE" AK3
           cp "out/arch/arm64/boot/$KERNEL_IMAGE_NAME" AK3/
