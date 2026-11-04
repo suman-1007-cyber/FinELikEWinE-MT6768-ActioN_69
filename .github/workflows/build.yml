@@ -297,7 +297,7 @@ jobs:
           cp "out/arch/arm64/boot/$KERNEL_IMAGE_NAME" AK3/
           if [ "$NEED_DTBO" = "true" ] && [ -f out/arch/arm64/boot/dtbo.img ]; then cp out/arch/arm64/boot/dtbo.img AK3/; fi
           cd AK3 && rm -rf .git
-          NAME="IceStoRM-${{ matrix.device }}-$(date +%Y%m%d)"
+          NAME="FinELikEWinE_69-${{ matrix.device }}-$(date +%Y%m%d)"
           zip -r9 "../$NAME.zip" . -x '*.git*' README.md
           echo "ZIP_NAME=$NAME" >> "$GITHUB_ENV"
 
