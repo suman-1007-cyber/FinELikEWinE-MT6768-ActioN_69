@@ -293,10 +293,10 @@ jobs:
 
       - name: Package with FinELikEWinE_69
         run: |
-          git clone --depth=1 -b "$FINELIKEWINE69_BRANCH" "$FINELIKE_SOURCE" AK3
-          cp "out/arch/arm64/boot/$KERNEL_IMAGE_NAME" AK3/
-          if [ "$NEED_DTBO" = "true" ] && [ -f out/arch/arm64/boot/dtbo.img ]; then cp out/arch/arm64/boot/dtbo.img AK3/; fi
-          cd AK3 && rm -rf .git
+          git clone --depth=1 -b "$FINELIKEWINE69_BRANCH" "$FINELIKEWINE69_SOURCE" FLW69
+          cp "out/arch/arm64/boot/$KERNEL_IMAGE_NAME" FLW69/
+          if [ "$NEED_DTBO" = "true" ] && [ -f out/arch/arm64/boot/dtbo.img ]; then cp out/arch/arm64/boot/dtbo.img FLW69/; fi
+          cd FLW69 && rm -rf .git
           NAME="FinELikEWinE_69-${{ matrix.device }}-$(date +%Y%m%d)"
           zip -r9 "../$NAME.zip" . -x '*.git*' README.md
           echo "ZIP_NAME=$NAME" >> "$GITHUB_ENV"
