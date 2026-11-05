@@ -264,6 +264,7 @@ jobs:
       - name: Build kernel
         run: |
           set -eo pipefail
+          KVER="$LOCALVERSION"; unset LOCALVERSION
           export ARCH="$KERNEL_ARCH" SUBARCH="$KERNEL_ARCH"
           [ "$ENABLE_CCACHE" = "true" ] && { export CCACHE_DIR=$HOME/.ccache; ccache -M 5G; CC_PREFIX="ccache clang"; } || CC_PREFIX="clang"
 
@@ -284,7 +285,7 @@ jobs:
           [ "$ADD_APATCH_SUPPORT" = "true" ] && $C -e KALLSYMS -e KALLSYMS_ALL
           [ "$DISABLE_LTO" = "true" ] && $C -d LTO_CLANG -d CFI_CLANG -d SHADOW_CALL_STACK -e LTO_NONE
           [ "$DISABLE_CC_WERROR" = "true" ] && $C -d CC_WERROR || true
-          $C --set-str LOCALVERSION "$LOCALVERSION"
+          $C --set-str LOCALVERSION "$KVER"
           "${MK[@]}" olddefconfig
 
           # build
