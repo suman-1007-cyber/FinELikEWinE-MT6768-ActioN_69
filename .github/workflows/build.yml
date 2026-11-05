@@ -302,15 +302,22 @@ jobs:
           zip -r9 "../$NAME.zip" . -x '*.git*' README.md
           echo "ZIP_NAME=$NAME" >> "$GITHUB_ENV"
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload flashable zip (no extra zip)
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.ZIP_NAME }}
+          path: ${{ env.ZIP_NAME }}.zip
+          archive: false
+          if-no-files-found: error
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: logs-${{ matrix.device }}
           path: |
-            ${{ env.ZIP_NAME }}.zip
             out/build.log
             susfs_report.txt
-          if-no-files-found: error
+          if-no-files-found: ignore
 
       - name: Release
         if: github.event.inputs.release == 'true'
